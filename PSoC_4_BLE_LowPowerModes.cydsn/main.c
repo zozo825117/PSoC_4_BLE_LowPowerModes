@@ -77,6 +77,47 @@ extern uint8 deviceConnected;
 /* 'restartAdvertisement' flag is used to restart advertisement */
 extern uint8 restartAdvertisement;
 
+uint8 p_state = 0;
+
+
+void TxCW(void)
+{
+	uint32 cfg2,cfgctrl,sy;
+
+    //// set CW mode, To prevent first time TX  frequency offset before CW mode enabled in case.
+   CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_MODEM), 0x96EC);        
+   
+   // Configure DSM as first order PLL
+   CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_CFGCTRL),0x0008);
+
+   // Enable Transmit at the required TX frequency
+   CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_CFG1), 0xBB48);
+   CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_DBUS), 0xE962);   // 0x992 is channel frequency in MHz
+
+
+    // Synchronisation delay for PA to ramp
+    CyDelayUs(120);
+    
+    // Disable modulation port
+    cfg2= CY_GET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_CFG2));
+	cfg2 |=0x1000;    
+	cfg2 &=~0x03FF;                     
+	cfg2 |=0x0200;    
+     
+    // Enable test mode
+    cfgctrl= CY_GET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_CFGCTRL));
+    cfgctrl |=0x8000; 
+
+    // Close the loop
+    sy= CY_GET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_SY));
+    sy |=0x4000;      
+
+    CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_CFG2), cfg2);   
+    CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_CFGCTRL), cfgctrl); 
+    CY_SET_XTND_REG32((void CYFAR *)(CYREG_BLE_BLERD_SY),sy);   
+    
+}
+
 /*******************************************************************************
 * Function Name: main
 ********************************************************************************
@@ -111,74 +152,25 @@ int main()
 		* used for this application are inside the 'CustomEventHandler' routine*/
         CyBle_ProcessEvents();
 		
-		/* Updated LED for status during BLE active states */
-		//HandleStatusLED();
-#if 0
-		if(TRUE == deviceConnected)
-		{
-			/* After the connection, send new connection parameter to the Client device 
-			* to run the BLE communication on desired interval. This affects the data rate 
-			* and power consumption. High connection interval will have lower data rate but 
-			* lower power consumption. Low connection interval will have higher data rate at
-			* expense of higher power. This function is called only once per connection. */
-			UpdateConnectionParam();
-			
-			/* When the Client Characteristic Configuration descriptor (CCCD) is written
-			* by Central device for enabling/disabling notifications, then the same
-			* descriptor value has to be explicitly updated in application so that
-			* it reflects the correct value when the descriptor is read */
-			UpdateNotificationCCCD();
-			lpmSel = LPMselData;
-		}
-#endif
+      if(p_state == 1)
+      {
+        TxCW();
+        p_state = 0;
+        
+        while(User_Button_Read())
+        {
+          	CyDelay(200);
+						RED_Write(~RED_Read());
+        }
+        RED_Write(1);
+      }
 
-#if 0
-		#ifdef ENABLE_LOW_POWER_MODE
-			/* Put system to Deep sleep, including BLESS, and wakeup on interrupt. 
-			* The source of the interrupt can be either BLESS Link Layer in case of 
-			* BLE advertisement and connection or by User Button press during BLE 
-			* disconnection */
+
 			HandleLowPowerMode(lpmSel);
-		#endif
-    #endif
-
-		CYBLE_BLESS_STATE_T blessState;
 
 
-            /* Leave chip in Deep Sleep mode */
-    		/* Put BLESS into Deep Sleep and check the return status */
-    		CyBle_EnterLPM(CYBLE_BLESS_DEEPSLEEP);
-    		
-    		/* Disable global interrupt to prevent changes from any other interrupt ISR */
-    		CyGlobalIntDisable;
-    	
-    		/* Check the Status of BLESS */
-    		blessState = CyBle_GetBleSsState();
 
 
-    		    /* If the ECO has started or the BLESS can go to Deep Sleep, then place CPU 
-    			* to Deep Sleep */
-    			if(blessState == CYBLE_BLESS_STATE_ECO_ON || blessState == CYBLE_BLESS_STATE_DEEPSLEEP)
-    		    {
-
-    		        CySysPmDeepSleep();
-
-    		 	  }
-
-    		
-    		/* Re-enable global interrupt mask after wakeup */
-    		CyGlobalIntEnable;        
-
-#if 0
-		if(restartAdvertisement)
-		{
-			/* Reset 'restartAdvertisement' flag*/
-			restartAdvertisement = FALSE;
-
-			/* Start Advertisement and enter Discoverable mode*/
-			CyBle_GappStartAdvertisement(CYBLE_ADVERTISING_FAST);	
-		}
-    #endif
     }	/* End of for(;;) */
 }
 

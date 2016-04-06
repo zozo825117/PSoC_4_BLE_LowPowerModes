@@ -62,7 +62,7 @@ void HandleLowPowerMode(uint8 lpmSel)
 		CYBLE_LP_MODE_T sleepMode;
 		CYBLE_BLESS_STATE_T blessState;
 
-        if (lpmSel == DEEPSLEEP)
+       //if (lpmSel == DEEPSLEEP)
         {
             /* Leave chip in Deep Sleep mode */
     		/* Put BLESS into Deep Sleep and check the return status */
